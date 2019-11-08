@@ -119,7 +119,7 @@ def getuseinfo(obj,n,key1,key2,key3,title):
     reqimg.add_header('User-Agent', user_agent)
 
     img = urllib2.urlopen(reqimg).read()
-
+    print(b)
     #取图片后缀名
     if re.search('jpg',b):
         extentionname = re.search('jpg',b).group()
