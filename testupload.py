@@ -1,26 +1,45 @@
 from wordpress_xmlrpc import Client, WordPressPost
-from wordpress_xmlrpc.methods.posts import GetPosts, NewPost
-from wordpress_xmlrpc.methods.users import GetUserInfo
-from wordpress_xmlrpc import Client
-from wordpress_xmlrpc.methods import posts
+from wordpress_xmlrpc.compat import xmlrpc_client
+from wordpress_xmlrpc.methods import media, posts,taxonomies
 
-wp = Client('https://wersupport.com/xmlrpc.php', 'king001', 'king001002003!')
+import mimetypes
 
 
 
+client = Client('https://wersupport.com/xmlrpc.php', 'king001', 'king001002003!')
 
-wp.call(GetUserInfo())
+# set to the path to your file
+filename = '1天猫-网店.png'
+
+# prepare metadata
+data = {
+        'name': 'picture.jpg',
+        'type': mimetypes.guess_type(filename)[0],  # mimetype
+}
+
+# read the binary file and let the XMLRPC library encode it into base64
+with open(filename, 'rb') as img:
+        data['bits'] = xmlrpc_client.Binary(img.read())
+
+response = client.call(media.UploadFile(data))
+# response == {
+#       'id': 6,
+#       'file': 'picture.jpg'
+#       'url': 'http://www.example.com/wp-content/uploads/2012/04/16/picture.jpg',
+#       'type': 'image/jpeg',
+# }
+attachment_id = response['id']
+print(attachment_id)
 
 
 post = WordPressPost()
-post.title = 'My new titlefdasf234'
-post.content = 'This is the body of my new post.'
-post.id = '123123'
-post.terms_names = {
-   'post_tag': ['test', 'firstpost'],
-   'category': ['Introductions', 'Tests']
-}
-
-#publish a new post
+tm=taxonomies.GetTaxonomy('seo')
+print(tm)
+post.title = 'Picture of the Dayfdasf'
+post.content = 'What a lovely picture today!'
 post.post_status = 'publish'
-wp.call(NewPost(post))
+post.thumbnail = attachment_id
+post.id = client.call(posts.NewPost(post))
+
+
+

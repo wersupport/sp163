@@ -1,3 +1,4 @@
+#coding:utf-8
 import urllib.request as urllib2
 import random
 from bs4 import BeautifulSoup
@@ -9,13 +10,36 @@ import re
 import time
 import json
 
+from wordpress_xmlrpc import Client, WordPressPost
+from wordpress_xmlrpc.methods.posts import GetPosts, NewPost
+from wordpress_xmlrpc.methods.users import GetUserInfo
+from wordpress_xmlrpc.methods import posts
+from wordpress_xmlrpc.methods import taxonomies
+from wordpress_xmlrpc import WordPressTerm
+from wordpress_xmlrpc.compat import xmlrpc_client
+from wordpress_xmlrpc.methods import media,posts
+
+import mimetypes
+
+
+#wordpress client
+client = Client('https://atvnet.com.au/xmlrpc.php', 'South Tao', 'king001002003!')
+
+#写入title
+filetitle= date.today().strftime("%d%m%y")+'technews'+'.csv'
+
+
 #PART 1 定义常亮,模拟header,本地路径,休息时间,爬取url等
 
-path = os.path.abspath(os.path.dirname(__file__))
-url = 'https://tech.163.com/special/00097UHL/tech_datalist.js?callback=data_callback'
+pathtemp = os.path.abspath(os.path.dirname(__file__))
+path=os.path.join(pathtemp,'imgfin')
+
+url = 'https://money.163.com/special/00259BVP/news_flow_index.js?callback=data_callback'
+imageUrl='https://money.163.com/'
 n=0
 timeout = 10
 tobewirtedcsvdata = []
+titlelist = []
 socket.setdefaulttimeout(timeout)
 sleep_download_time = 5
 
@@ -66,13 +90,10 @@ def getTitle(obj):
 #4.3 获取对象中的图片链接
 def getImgurl(obj):
     #get first image
-
     try:
         detailImgurl = obj.find(name='p', class_='f_center').img.get('src')
     except:
-        detailImgurl = "https://atvnet.com.au/wp-content/uploads/2019/06/logo-retina.png"
-
-
+        detailImgurl = "noimage"
     return detailImgurl
 
 
@@ -101,7 +122,6 @@ def getContent(obj,sourceurl):
         part4 = str(originaltitleHtml)
         finalContent = part1.replace(part4,' ').replace(part2,'<br>').replace(part3," ") + '<p><a href=%s  target="_blank">'%(sourceurl)+source+'</a></p>'
 
-
     except:
         finalContent = None
         pass
@@ -110,90 +130,112 @@ def getContent(obj,sourceurl):
 
     return finalContent
 
-# 写入列表 写入图片 写入文件
-def getuseinfo(obj,n,key1,key2,key3,title,filetitle):
-
-    b = getImgurl(obj)
-    c = getContent(obj)
-
-    reqimg= urllib2.Request(url=b)
-    reqimg.add_header('User-Agent', user_agent)
-
-    img = urllib2.urlopen(reqimg).read()
-    print(b)
-    #取图片后缀名
-    if re.search('jpg',b):
-        extentionname = re.search('jpg',b).group()
-    elif re.search('jpeg',b):
-        extentionname = re.search('jpeg',b).group()
-    elif re.search('png',b):
-        extentionname = re.search('png',b).group()
-    elif re.search('gif',b) :
-        extentionname = re.search('gif',b).group()
+# 写入列表 写入图片 写入xmlrpc
+def getuseinfo(obj,n,key1,key2,key3,title,contentUrl):
+    if key3 == '图集':
+        pass
     else:
-        extentionname = re.search('jpg',b).group()
+        b = getImgurl(obj)
+        c = getContent(obj,contentUrl)
 
-    #print(extentionname)
-    imgName =  str(n)+key1+'-'+key2+ '.'+extentionname
-    imgPath= os.path.join(path,imgName)
-    #print(imgPath)
+        if b != 'noimage':
+            d=b
+        else:
+            d = 'https://atvnet.com.au/wp-content/uploads/2019/06/logo-retina.png'
 
-    #写入图片
-    with open(imgPath, 'wb') as f:
-        f.write(img)
+        reqimg = urllib2.Request(url=d)
+        reqimg.add_header('User-Agent', user_agent)
 
-        f.close()
+        img = urllib2.urlopen(reqimg).read()
+        print(d)
 
-    #写入列表
-    templist = [n,title,b,c,key1,key2,key3]
-    tobewirtedcsvdata.append(templist)
-    pushintoCSV(templist,filetitle)
-    #print(tobewirtedcsvdata)
-    return tobewirtedcsvdata
+        #取图片后缀名
+        if re.search('jpg',d):
+            extentionname = re.search('jpg',d).group()
 
-#写入 csv
-def pushintoCSV(list,title):
+        elif re.search('jpeg',d):
+            extentionname = re.search('jpeg',d).group()
 
-    with open(title,'a+',encoding='utf-8-sig') as f:
-        fcsv = csv.writer(f,lineterminator='\n')
-        fcsv.writerow(list)
-        f.flush()
-        f.close()
+        elif re.search('png',d):
+            extentionname = re.search('png',d).group()
+
+        elif re.search('gif',d) :
+            extentionname = re.search('gif',d).group()
+
+        else:
+            extentionname = re.search('jpg',d).group()
 
 
+        #print(extentionname)
+        imgName =  str(n)+'-'+key1+'-'+key2+ '.'+extentionname
+        imgPath= os.path.join(path,imgName)
+
+
+        #写入图片
+        with open(imgPath, 'wb') as f:
+            f.write(img)
+            f.close()
+        print(n,imgPath)
+        #写入列表
+        templist = [n,title,b,c,key1,key2,key3]
+        print(templist)
+
+        #构造post, 图片metadata, 发布post
+        try:
+            data = {
+                'name': imgName,
+                'type':mimetypes.guess_type(imgPath)[0],  # mimetype
+            }
+            with open(imgPath, 'rb') as img:
+                data['bits'] = xmlrpc_client.Binary(img.read())
+
+            response = client.call(media.UploadFile(data))
+            attachmentID= response['id']
+
+
+
+            post = WordPressPost()
+            post.title=title
+            post.content = c
+            post.post_status  = 'draft'
+            post.excerpt = title+'-'+key1+'-'+key2+'-'+'亚太商业网络'
+
+            post.terms_names ={
+                'post_tag': [key1,key2,key3],
+                'category':['新闻']
+            }
+            post.thumbnail = attachmentID
+            post.id=client.call(posts.NewPost(post))
+
+            return templist
+        except:
+            print (str(n) + ' have a error')
+            pass
 
 
 
 #PART 3 遍历，取值
 
-#写入title
-filetitle= date.today().strftime("%d%m%y")+'technews'+'.csv'
-
-
-with open(filetitle,'a+',encoding='utf-8-sig') as f:
-    fcsv = csv.writer(f,lineterminator='\n')
-    fcsv.writerow(['number','title','imageurl','content','keywords1','keywords2','keywords3'])
-    f.flush()
-    f.close()
-
-
 for jscontent in jscontents:
 
     title = jscontent['title']
     contentUrl=jscontent['docurl']
+    titlelist = titlelist.append(title)
 
     if len(jscontent['keywords'])>=2:
         keywords1 =jscontent['keywords'][0]['keyname']
         keywords2 =jscontent['keywords'][1]['keyname']
+        keywords3 = jscontent['label']
     else:
-        keywords1 = '互联网'
-        keywords2 = 'Technology'
-    keywords3 =jscontent['label']
+        keywords1 = '财经新闻'
+        keywords2 = 'Business'
+        keywords3 = '商业'
 
     detailContentObj = detailPage(contentUrl)
     print(n,contentUrl)
-    finallist = getuseinfo(detailContentObj,n,keywords1,keywords2,keywords3,title,filetitle)
+    finallist = getuseinfo(detailContentObj,n,keywords1,keywords2,keywords3,title,contentUrl)
     n+=1
+    pass
 
-    print(n, contentUrl)
+
 
