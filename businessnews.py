@@ -63,23 +63,31 @@ def getJsonContent(url):
 # 1 获得内容页面tag对象, 返回一个tag对象
 def detailPage(url):
     # 详细页面的url request
-    req1 = urllib2.Request(url=url)
-    req1.add_header('User-Agent', user_agent)
-    # urlopen 打开
-    detailreq = urllib2.urlopen(req1)
-    detailcontent = detailreq.read().decode('gb18030')
-    # 取到beautifulsoup 的对象
-    detailobj = BeautifulSoup(detailcontent,'html5lib')
-    time.sleep(sleep_download_time)
-    detailreq.close()
-    return detailobj
+    try:
+        req1 = urllib2.Request(url=url)
+        req1.add_header('User-Agent', user_agent)
+        # urlopen 打开
+        detailreq = urllib2.urlopen(req1)
+        detailcontent = detailreq.read().decode('gb18030', errors = 'ignore')
+        # 取到beautifulsoup 的对象
+        detailobj = BeautifulSoup(detailcontent,'html5lib')
+        time.sleep(sleep_download_time)
+        detailreq.close()
+        return detailobj
+    except:
+        print('decode or open url error')
+        pass
 
 
 # 2 获取对象中的标题
 def getTitle(obj):
     # 取文章标题
-    detailTitle = obj.find(name='div',class_='post_content_main').h1.getText()
-    return detailTitle
+    try:
+        detailTitle = obj.find(name='div',class_='post_content_main').h1.getText()
+        return detailTitle
+    except:
+        print('get title error')
+        pass
 # 3 获取对象中的图片链接
 def getImgurl(obj, featuredimageurl):
     # "get first image"

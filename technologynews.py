@@ -62,24 +62,34 @@ def getJsonContent(url):
 
 # 1 获得内容页面tag对象, 返回一个tag对象
 def detailPage(url):
+
     # 详细页面的url request
-    req1 = urllib2.Request(url=url)
-    req1.add_header('User-Agent', user_agent)
-    # urlopen 打开
-    detailreq = urllib2.urlopen(req1)
-    detailcontent = detailreq.read().decode('gb18030')
-    # 取到beautifulsoup 的对象
-    detailobj = BeautifulSoup(detailcontent,'html5lib')
-    time.sleep(sleep_download_time)
-    detailreq.close()
-    return detailobj
+    try:
+        req1 = urllib2.Request(url=url)
+        req1.add_header('User-Agent', user_agent)
+        # urlopen 打开
+        detailreq = urllib2.urlopen(req1)
+        detailcontent = detailreq.read().decode('gb18030', errors='ignore')
+        # 取到beautifulsoup 的对象
+        detailobj = BeautifulSoup(detailcontent, 'html5lib')
+        time.sleep(sleep_download_time)
+        detailreq.close()
+        return detailobj
+    except:
+        print('decode or open url error')
+        pass
 
 
 # 2 获取对象中的标题
 def getTitle(obj):
     # 取文章标题
-    detailTitle = obj.find(name='div',class_='post_content_main').h1.getText()
-    return detailTitle
+    try:
+        detailTitle = obj.find(name='div',class_='post_content_main').h1.getText()
+        return detailTitle
+    except:
+        print('no title fetched')
+        pass
+
 # 3 获取对象中的图片链接
 def getImgurl(obj, featuredimageurl):
     # "get first image"
@@ -91,15 +101,15 @@ def getImgurl(obj, featuredimageurl):
 # 4 获取对象的正文html
 def getContent(obj,sourceurl):
     try:
-        detailinnerHtml = obj.find(name='div',class_='post_text')
-        originaltitleHtml = obj.find(name='p',class_='otitle')
-        #广告内容
-        adshtml= obj.find(name='div',class_='gg200x300')
+        detailinnerHtml = obj.find(name='div', class_='post_text')
+        originaltitleHtml = obj.find(name='p', class_='otitle')
+        # 广告内容
+        adshtml = obj.find(name='div', class_='gg200x300')
 
-        #获得来源div - delete later, source editor
-        sourcediv = obj.find(name='div',class_='ep-source cDGray')
+        # 获得来源div - delete later, source editor
+        sourcediv = obj.find(name='div', class_='ep-source cDGray')
 
-        source = obj.find(name='span',class_='left').getText()
+        source = obj.find(name='span', class_='left').getText()
         '''
         得出完美的内容 字符串处理
         part 1 - 原始的全部字符串
@@ -107,16 +117,13 @@ def getContent(obj,sourceurl):
         part 3 - 作者块
         finalContent=  处理完ready to use的
         '''
-        part1 = str(detailinnerHtml).replace('href', 'hre1f')
+        part1 = str(detailinnerHtml)
         part2 = str(adshtml)
         part3 = str(sourcediv)
         part4 = str(originaltitleHtml)
-
-        tempfinal = part1.replace(part4,' ').replace(part2,'<br>')
-        print(part2)
-        tempfinal2 = tempfinal.replace(part3, '<br>')
-        print(part3)
-        finalContent = tempfinal2+ '<p><a href=%s  target="_blank">'%(sourceurl)+source+'</a></p>'
+        finalContent = part1.replace(part4, ' ').replace(part2, '<br>').replace(part3,
+                                                                                " ") + '<p><a href=%s  target="_blank">' % (
+                           sourceurl) + source + '</a></p>'
 
     except:
         finalContent = None
