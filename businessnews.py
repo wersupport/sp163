@@ -1,7 +1,7 @@
 #coding:utf-8
 import urllib.request as urllib2
 import random
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup,Comment
 from datetime import date
 import csv
 import socket
@@ -98,35 +98,34 @@ def getImgurl(obj, featuredimageurl):
     return detailImgurl
 # 4 获取对象的正文html
 def getContent(obj,sourceurl):
+    source = obj.find(name='span', class_='left').getText()
+
+    soup = obj
+
+    soup.find(name='div', class_='ep-source cDGray').replace_with('')
     try:
-        detailinnerHtml = obj.find(name='div',class_='post_text')
-        originaltitleHtml = obj.find(name='p',class_='otitle')
-        #广告内容
-        adshtml= obj.find(name='div',class_='gg200x300')
-
-        #获得来源div - delete later, source editor
-        sourcediv = obj.find(name='div',class_='ep-source cDGray')
-
-        source = obj.find(name='span',class_='left').getText()
-        '''
-        得出完美的内容 字符串处理
-        part 1 - 原始的全部字符串
-        part 2 - 广告块
-        part 3 - 作者块
-        finalContent=  处理完ready to use的
-        '''
-        part1 = str(detailinnerHtml)
-        part2 = str(adshtml)
-        part3 = str(sourcediv)
-        part4 = str(originaltitleHtml)
-        finalContent = part1.replace(part4,' ').replace(part2,'<br>').replace(part3," ") + '<p><a href=%s  target="_blank">'%(sourceurl)+source+'</a></p>'
-
+        soup.find(name='div', class_='gg200x300').clear()
     except:
-        finalContent = None
-        print('error happen, finalcontent is none')
+        print('ads remove not successful')
         pass
 
-    return finalContent
+    # soup.find(name='div', class_="ep-statement").replace_with('')
+    [s.extract() for s in soup.findAll('script')]
+    comments = soup.findAll(text=lambda text: isinstance(text, Comment))
+    [comment.extract() for comment in comments]
+
+    detailinnerHtml = soup.find(name='div', class_='post_text')
+    originaltitleHtml = soup.find(name='p', class_='otitle')
+    part1 = str(detailinnerHtml)
+    part4 = str(originaltitleHtml)
+
+    finalContent = part1.replace(part4, ' ') + '<p><a href=%s  target="_blank">' % (
+        sourceurl) + source + '</a></p>'
+
+    if '视觉中国' in finalContent:
+        return None
+    else:
+        return finalContent
 
 # 5 Store uploade the Image
 def upLoadToWp(title, toBeUsedImgUrl, toBeUsedContent, n, keywords1,keywords2,keywords3,):
@@ -178,7 +177,7 @@ def upLoadToWp(title, toBeUsedImgUrl, toBeUsedContent, n, keywords1,keywords2,ke
 
         post.terms_names = {
             'post_tag': [keywords3, keywords2, keywords1],
-            'category': ['新闻']
+            'category': ['商业新闻']
         }
         post.thumbnail = attachmentID
         post.id = client.call(posts.NewPost(post))

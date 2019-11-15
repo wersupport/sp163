@@ -1,7 +1,7 @@
 #coding:utf-8
 import urllib.request as urllib2
 import random
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Comment
 from datetime import date
 import csv
 import socket
@@ -29,7 +29,7 @@ url = 'https://tech.163.com/special/00097UHL/tech_datalist.js?callback=data_call
 
 
 #常量  n为图片前缀,timeout 为等待时间,
-n=0
+n=1
 timeout = 20
 socket.setdefaulttimeout(timeout)
 sleep_download_time = 5
@@ -100,37 +100,35 @@ def getImgurl(obj, featuredimageurl):
     return detailImgurl
 # 4 获取对象的正文html
 def getContent(obj,sourceurl):
+    source = obj.find(name='span', class_='left').getText()
+
+
+    soup = obj
+
+    soup.find(name='div', class_='ep-source cDGray').replace_with('')
     try:
-        detailinnerHtml = obj.find(name='div', class_='post_text')
-        originaltitleHtml = obj.find(name='p', class_='otitle')
-        # 广告内容
-        adshtml = obj.find(name='div', class_='gg200x300')
-
-        # 获得来源div - delete later, source editor
-        sourcediv = obj.find(name='div', class_='ep-source cDGray')
-
-        source = obj.find(name='span', class_='left').getText()
-        '''
-        得出完美的内容 字符串处理
-        part 1 - 原始的全部字符串
-        part 2 - 广告块
-        part 3 - 作者块
-        finalContent=  处理完ready to use的
-        '''
-        part1 = str(detailinnerHtml)
-        part2 = str(adshtml)
-        part3 = str(sourcediv)
-        part4 = str(originaltitleHtml)
-        finalContent = part1.replace(part4, ' ').replace(part2, '<br>').replace(part3,
-                                                                                " ") + '<p><a href=%s  target="_blank">' % (
-                           sourceurl) + source + '</a></p>'
-
+        soup.find(name='div', class_='gg200x300').clear()
     except:
-        finalContent = None
-        print('error happen, finalcontent is none')
+        print('ads remove not successful')
         pass
 
-    return finalContent
+    #soup.find(name='div', class_="ep-statement").replace_with('')
+    [s.extract() for s in soup.findAll('script')]
+    comments = soup.findAll(text=lambda text: isinstance(text, Comment))
+    [comment.extract() for comment in comments]
+
+    detailinnerHtml = soup.find(name='div', class_='post_text')
+    originaltitleHtml = soup.find(name='p', class_='otitle')
+    part1 = str(detailinnerHtml)
+    part4 = str(originaltitleHtml)
+
+    finalContent = part1.replace(part4, ' ')+ '<p><a href=%s  target="_blank">' % (
+                       sourceurl) + source + '</a></p>'
+
+    if '视觉中国' in finalContent:
+        return None
+    else:
+        return finalContent
 
 # 5 Store uploade the Image
 def upLoadToWp(title, toBeUsedImgUrl, toBeUsedContent, n, keywords1,keywords2,keywords3,):
@@ -161,33 +159,36 @@ def upLoadToWp(title, toBeUsedImgUrl, toBeUsedContent, n, keywords1,keywords2,ke
     print(n, imgPath)
 
     templist = [n, title, imgPath, toBeUsedContent, keywords1, keywords2, keywords3]
-
+    #print(templist)
     # 构造post, 图片metadata, 发布post
     try:
-        data = {
-            'name': imgName,
-            'type': mimetypes.guess_type(imgPath)[0],  # mimetype
-        }
-        with open(imgPath, 'rb') as img:
-            data['bits'] = xmlrpc_client.Binary(img.read())
+        if toBeUsedContent != None:
+            data = {
+                'name': imgName,
+                'type': mimetypes.guess_type(imgPath)[0],  # mimetype
+            }
+            with open(imgPath, 'rb') as img:
+                data['bits'] = xmlrpc_client.Binary(img.read())
 
-        response = client.call(media.UploadFile(data))
-        attachmentID = response['id']
+            response = client.call(media.UploadFile(data))
+            attachmentID = response['id']
 
-        post = WordPressPost()
-        post.title = title
-        post.content = toBeUsedContent
-        post.post_status = 'draft'
-        post.excerpt = title + '-' + keywords1 + '-' + keywords2 + '-'+keywords3+'-' + '亚太商业网络'
+            post = WordPressPost()
+            post.title = title
+            post.content = toBeUsedContent
+            post.post_status = 'draft'
+            post.excerpt = title + '-' + keywords1 + '-' + keywords2 + '-'+keywords3+'-' + '亚太商业网络'
 
-        post.terms_names = {
-            'post_tag': [keywords3, keywords2, keywords1],
-            'category': ['新闻']
-        }
-        post.thumbnail = attachmentID
-        post.id = client.call(posts.NewPost(post))
-        return templist
-
+            post.terms_names = {
+                'post_tag': [keywords3, keywords2, keywords1],
+                'category': ['互联网']
+            }
+            post.thumbnail = attachmentID
+            post.id = client.call(posts.NewPost(post))
+            return templist
+        else:
+            print(str(n), 'None Content, contains 视觉中国等字符,去除')
+            pass
     except:
         print(str(n) + ' have a error')
         pass
@@ -221,6 +222,8 @@ def mainFunc(jsDatas,n):
             keywords3 = '互联网'
 
         if contentType == 'photoset':
+            print(str(n) + 'is photoset, passed')
+        elif contentType == 'special':
             print(str(n) + 'is photoset, passed')
         else:
             detailContentObj = detailPage(contentUrl)
